@@ -201,7 +201,14 @@ returnST :: a -> ST a
 returnST = undefined
 
 bindST :: ST a -> (a -> ST b) -> ST b
-bindST = undefined
+bindST a f = aux
+  where
+    aux :: a -> ST b
+    aux s = f x s'
+      where (x, s') = a s
+      
+
+-- bindST a f = f <*> a
 
 {-
 That is, `returnST` converts a value into a store transformer by simply
@@ -453,7 +460,10 @@ We write an *action* that returns the current index (and increments it). Use
 
 freshM :: S.State (MySt a) Int
 freshM = do
-  undefined
+  s <- S.get
+    let i = index s in
+      S.put (M {index = i + 1, freq = freq s}
+      return i
 
 {-
 Similarly, we want an action that updates the frequency of a given
