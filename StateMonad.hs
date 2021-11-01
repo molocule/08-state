@@ -203,10 +203,16 @@ returnST = undefined
 bindST :: ST a -> (a -> ST b) -> ST b
 bindST a f = aux
   where
-    aux :: a -> ST b
     aux s = f x s'
-      where (x, s') = a s
-      
+      where
+        (x, s') = a s
+
+-- bindST elt f = aux elt
+--   where
+--     aux :: ST a -> Store -> (ST b, Store)
+--     aux x = \s -> (f x s, s)
+--       where
+--         (x, s') = elt a
 
 -- bindST a f = f <*> a
 
@@ -461,9 +467,11 @@ We write an *action* that returns the current index (and increments it). Use
 freshM :: S.State (MySt a) Int
 freshM = do
   s <- S.get
-    let i = index s in
-      S.put (M {index = i + 1, freq = freq s}
-      return i
+  let i = index s
+   in S.put
+        (M {index = i + 1, freq = freq s})
+        return
+        i
 
 {-
 Similarly, we want an action that updates the frequency of a given
