@@ -140,7 +140,10 @@ instance Arb1 a => Arb1 [a] where
   arb1 s =
     let (b :: Bool, s1) = arb1 s
      in if b
-          then let (a :: a, s1) = arb1 s in (a : fst (arb1 s1), s1)
+          then
+            let (a :: a, s2) = arb1 s1
+             in let (as :: [a], s3) = arb1 s2
+                 in (a : as, s3)
           else ([], s)
 
 testArb1 :: Arb1 a => Int -> a
@@ -208,9 +211,7 @@ What if we want a bounded generator? See if you can define one without using `Ra
 -}
 
 bounded :: Int -> Gen Int
-bounded b = do
-  (a :: Int) <- arb
-  return (a `mod` b)
+bounded b = (`mod` b) <$> arb
 
 {-
 Now define a `sample` function, which generates and prints 10 random values.
@@ -220,9 +221,8 @@ sample :: Show a => Gen a -> IO ()
 sample gen = do
   seed <- (Random.randomIO :: IO Int) -- get a seed from the global random number generator
   -- hidden in the IO monad
-  gen' <- gen seed
-  v <- iterate gen 10
-  forM_ v print
+  let vals = S.evalState (replicateM 10 gen) (mkStdGen seed)
+  forM_ vals print
 
 {-
 For example, you should be able to sample using the `bounded` combinator.
@@ -257,10 +257,10 @@ Can we define some standard QuickCheck combinators to help us?
 What about `elements`, useful for the `Bool` instance ?
 -}
 
--- elements :: [a] -> Gen a
--- elements t = do
---   a <- bounded (length t)
---   return a !! t
+elements :: [a] -> Gen a
+elements t = do
+  a <- bounded (length t)
+  return (t !! a)
 
 instance Arb Bool where
   arb = elements [False, True]
@@ -268,9 +268,17 @@ instance Arb Bool where
 {-
 or `frequency`, which we can use for the `[a]` instance ?
 -}
+nth :: Int -> [(Int, a)] -> a
+nth i ((j, x) : xs)
+  | i < j = x
+  | otherwise = nth (i - j) xs
+nth _ [] = error "frequency: empty"
 
 frequency :: [(Int, Gen a)] -> Gen a
-frequency = undefined
+frequency table = do
+  let total = sum (map fst table)
+  index <- bounded total
+  nth index table
 
 instance (Arb a) => Arb [a] where
   arb = frequency [(1, return []), (3, (:) <$> arb <*> arb)]
