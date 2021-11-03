@@ -64,10 +64,13 @@ Our random integers depend on the seed that we provide.
 -}
 
 -- >>> testRandom 1
+-- -8728299723972136512
 
 -- >>> testRandom 2
+-- 7133861895013252414
 
 -- >>> testRandom 3
+-- 5757771102651567923
 
 {-
 If we'd like to constrain that integer to a specific inclusive range `(0, n)`
@@ -85,10 +88,13 @@ testBounded :: Int -> Int
 testBounded = fst . nextBounded 20 . mkStdGen
 
 -- >>> testBounded 1
+-- 0
 
 -- >>> testBounded 2
+-- 17
 
 -- >>> testBounded 3
+-- 19
 
 {-
 QuickCheck is defined by a class of types that can construct random
@@ -116,8 +122,11 @@ instance (Arb1 a, Arb1 b) => Arb1 (a, b) where
   arb1 :: StdGen -> ((a, b), StdGen)
   arb1 s =
     let (a :: a, s1) = arb1 s
-        (b :: b, s2) = arb1 s
+        (b :: b, s2) = arb1 s1
      in ((a, b), s2)
+
+-- >>> testArb1 25 :: (Int, Int)
+-- (6512035894549513177,-3231264286439759907)
 
 {-
 And for lists? Give this one a try!  Although we don't have QCs combinators
@@ -127,16 +136,24 @@ is generated so that you get reasonable lists.
 -}
 
 instance Arb1 a => Arb1 [a] where
-  arb1 s = undefined
+  arb1 :: StdGen -> ([a], StdGen)
+  arb1 s =
+    let (b :: Bool, s1) = arb1 s
+     in if b
+          then let (a :: a, s1) = arb1 s in (a : fst (arb1 s1), s1)
+          else ([], s)
 
 testArb1 :: Arb1 a => Int -> a
 testArb1 = fst . arb1 . mkStdGen
 
 -- >>> testArb1 1 :: [Int]
+-- [-8728299723972136512]
 
 -- >>> testArb1 2 :: [Int]
+-- [7133861895013252414]
 
 -- >>> testArb1 3 :: [Int]
+-- [5757771102651567923]
 
 {-
 Ouch, there's a lot of state passing going on here.
@@ -191,7 +208,9 @@ What if we want a bounded generator? See if you can define one without using `Ra
 -}
 
 bounded :: Int -> Gen Int
-bounded b = undefined
+bounded b = do
+  (a :: Int) <- arb
+  return (a `mod` b)
 
 {-
 Now define a `sample` function, which generates and prints 10 random values.
@@ -201,7 +220,9 @@ sample :: Show a => Gen a -> IO ()
 sample gen = do
   seed <- (Random.randomIO :: IO Int) -- get a seed from the global random number generator
   -- hidden in the IO monad
-  undefined
+  gen' <- gen seed
+  v <- iterate gen 10
+  forM_ v print
 
 {-
 For example, you should be able to sample using the `bounded` combinator.
@@ -222,16 +243,24 @@ What about random generation for other types?  How does the state
 monad help that definition? How does it compare to the version above?
 -}
 
-instance (Arb a, Arb b) => Arb (a, b) where
-  arb = undefined
+-- instance (Arb a, Arb b) => Arb (a, b) where
+--   arb = do
+--     s <- S.get
+--     let (x :: a, s') = arb s
+--     s'' <- s' >>=
+--     let (y :: b, s'') = Random.uniform
+--     S.put s''
+--     return (x, y)
 
 {-
 Can we define some standard QuickCheck combinators to help us?
 What about `elements`, useful for the `Bool` instance ?
 -}
 
-elements :: [a] -> Gen a
-elements = undefined
+-- elements :: [a] -> Gen a
+-- elements t = do
+--   a <- bounded (length t)
+--   return a !! t
 
 instance Arb Bool where
   arb = elements [False, True]
