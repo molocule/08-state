@@ -198,23 +198,16 @@ where that leads...
 -}
 
 returnST :: a -> ST a
-returnST = undefined
+returnST x = (x,) -- \s -> (x, s)
 
 bindST :: ST a -> (a -> ST b) -> ST b
-bindST a f = aux
-  where
-    aux s = f x s'
-      where
-        (x, s') = a s
+-- bindST :: (Store -> (a, Store) -> (a -> (Store -> (b, Store))) -> Store -> (b, Store))
+bindST f g = uncurry g . f
 
--- bindST elt f = aux elt
+-- bindST m k s = (b, s2)
 --   where
---     aux :: ST a -> Store -> (ST b, Store)
---     aux x = \s -> (f x s, s)
---       where
---         (x, s') = elt a
-
--- bindST a f = f <*> a
+--     (a, s1) = m s
+--     (b, s2) = k a s1
 
 {-
 That is, `returnST` converts a value into a store transformer by simply
@@ -234,14 +227,26 @@ need something else for this case.)
 -}
 
 label2 :: Tree a -> Tree (a, Int)
+-- label2 t = fst (aux t 0)
+--   where
+--     aux :: Tree a -> ST (Tree (a, Int))
+--     aux (Leaf x) = \s -> (Leaf (x, s), s + 1)
+--     aux (Branch t1 t2) = \s ->
+--       let (t1', s') = aux t1 s
+--           (t2', s'') = aux t2 s'
+--        in --  in (Branch t1' t2', s'')
+
+--           returnST (Branch t1' t2') s''
 label2 t = fst (aux t 0)
   where
     aux :: Tree a -> ST (Tree (a, Int))
     aux (Leaf x) = \s -> (Leaf (x, s), s + 1)
-    aux (Branch t1 t2) = \s ->
-      let (t1', s') = aux t1 s
-          (t2', s'') = aux t2 s'
-       in (Branch t1' t2', s'')
+    aux (Branch t1 t2) =
+      bindST (aux t1) $
+        \t1' ->
+          bindST (aux t2) $
+            \t2' ->
+              returnST (Branch t1' t2')
 
 {-
 Because the `ST` parameterized has definitions for return and bind, we should
